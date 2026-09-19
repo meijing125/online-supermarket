@@ -9,7 +9,11 @@
 import os
 import sqlite3
 
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'supermarket.db')
+# 本脚本放在 deploy/ 下，数据库在仓库根目录，所以要上跳一层；
+# 原先只取了一层 dirname，指向的是 deploy/supermarket.db（不存在），
+# 运行时会新建一个空库并报 "no such table: products"，迁移静默失效。
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB = os.environ.get('DB_PATH') or os.path.join(REPO_ROOT, 'supermarket.db')
 
 MAP = {
     'iPhone 16 Pro Max 256GB':   'iphone-16-pro-max.jpg',

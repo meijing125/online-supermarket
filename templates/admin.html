@@ -30,6 +30,15 @@
                 </div>
             </div>
             <div class="mb-3">
+                <label class="form-label fw-bold">商品分类 <span class="text-danger">*</span></label>
+                <select class="form-select form-select-lg" id="category" name="category">
+                    {% for key, label in categories.items() %}
+                    <option value="{{ key }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">决定商品出现在首页哪个分类标签下，请务必选择正确。</div>
+            </div>
+            <div class="mb-3">
                 <label class="form-label fw-bold">商品图片</label>
                 <div class="input-group">
                     <input type="url" class="form-control form-control-lg" id="image_url" name="image_url"
@@ -71,10 +80,11 @@
                     <tr>
                         <th style="width:80px;padding-left:1.2rem;">图片</th>
                         <th>商品名称</th>
+                        <th class="text-center" style="width:80px;">分类</th>
                         <th class="text-end">价格</th>
                         <th class="text-center">库存</th>
                         <th>上架时间</th>
-                        <th class="text-center" style="width:160px;">操作</th>
+                        <th class="text-center" style="width:250px;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -88,29 +98,57 @@
                                  onerror="this.style.display='none'">
                         </td>
                         <td>
-                            <span class="fw-semibold">{{ p.name }}</span>
-                            {% if p.stock == 0 %}
+                            <span class="fw-semibold {{ 'text-muted text-decoration-line-through' if not p.is_active }}">{{ p.name }}</span>
+                            {% if not p.is_active %}
+                            <span class="badge bg-secondary ms-2" style="font-size:0.7rem;">已下架</span>
+                            {% elif p.stock == 0 %}
                             <span class="badge bg-danger ms-2" style="font-size:0.7rem;">售罄</span>
                             {% elif p.stock <= 10 %}
                             <span class="badge bg-warning text-dark ms-2" style="font-size:0.7rem;">低库存</span>
                             {% endif %}
                         </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                {{ categories.get(p.category, '未分类') }}
+                            </span>
+                        </td>
                         <td class="text-end fw-bold" style="color:var(--red);">¥{{ "%.2f"|format(p.price) }}</td>
-                        <td class="text-center">{{ p.stock }}</td>
+                        <td class="text-center">
+                            {% if p.stock == 0 and p.is_active %}
+                            <span class="fw-bold text-danger">{{ p.stock }}</span>
+                            {% else %}
+                            {{ p.stock }}
+                            {% endif %}
+                        </td>
                         <td class="text-muted small">{{ p.created_at.strftime('%Y-%m-%d') }}</td>
                         <td class="text-center">
+                            <button class="btn btn-sm {{ 'btn-danger' if p.stock <= 10 else 'btn-outline-success' }} me-1"
+                                    style="border-radius:8px;"
+                                    onclick="openRestockModal({{ p.id }}, '{{ p.name|e }}', {{ p.stock }})"
+                                    title="补货：在现有库存上追加数量">
+                                <i class="bi bi-plus-circle me-1"></i>补货
+                            </button>
                             <button class="btn btn-sm btn-outline-dark me-1"
                                     style="border-radius:8px;"
                                     onclick="openEditModal({{ p.id }})"
                                     title="编辑商品">
                                 <i class="bi bi-pencil me-1"></i>编辑
                             </button>
+                            {% if p.is_active %}
                             <button class="btn btn-sm btn-outline-danger"
                                     style="border-radius:8px;"
                                     onclick="deleteProduct({{ p.id }}, '{{ p.name|e }}')"
                                     title="下架商品">
                                 <i class="bi bi-trash me-1"></i>下架
                             </button>
+                            {% else %}
+                            <button class="btn btn-sm btn-outline-primary"
+                                    style="border-radius:8px;"
+                                    onclick="restoreProduct({{ p.id }}, '{{ p.name|e }}')"
+                                    title="重新上架">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>上架
+                            </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -129,10 +167,11 @@
     <div class="card mt-3 border-0 shadow-sm p-3" style="border-radius:12px;background:#fffef9;">
         <h6 class="fw-bold"><i class="bi bi-lightbulb me-2" style="color:var(--gold);"></i>温馨提示</h6>
         <ul class="mb-0 small text-muted">
-            <li>商品上架后将立即显示在首页</li>
+            <li>「补货」是在现有库存上<b>追加</b>数量，不会覆盖其它商品信息；「编辑」是整条覆盖，改库存请优先用补货</li>
+            <li>库存 ≤ 10 会标「低库存」、= 0 会标「售罄」，首页对应商品无法下单，记得及时补货</li>
             <li>推荐使用 <code>https://picsum.photos/seed/名称/400/300</code> 作为图片链接</li>
-            <li>编辑商品不会清空已有购物车记录</li>
-            <li>下架商品将永久删除，如有订单记录则无法下架</li>
+            <li>下架是软删除，商品会从首页消失但历史订单不受影响，随时可以重新上架</li>
+            <li>取消订单时，订单里的商品数量会自动加回库存</li>
         </ul>
     </div>
 </div>
@@ -167,6 +206,14 @@
                     </div>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label fw-bold">商品分类 <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg" id="edit-category">
+                        {% for key, label in categories.items() %}
+                        <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
                     <label class="form-label fw-bold">商品图片</label>
                     <div class="input-group">
                         <input type="url" class="form-control form-control-lg" id="edit-image-url" placeholder="https://... 或点击右侧按钮上传">
@@ -189,6 +236,66 @@
                 <button type="button" class="btn btn-outline-dark btn-lg px-4" style="border-radius:12px;" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-dark btn-lg px-5" style="border-radius:12px;" onclick="saveEdit()">
                     <i class="bi bi-check-lg me-1"></i>保存修改
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== 补货弹窗 ====== -->
+<div class="modal fade" id="restockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0" style="border-radius:18px;overflow:hidden;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-plus-circle me-2" style="color:var(--gold);"></i>商品补货
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 pb-2">
+                <div id="restock-error" class="alert alert-danger d-none" style="border-radius:10px;"></div>
+
+                <div class="mb-3 p-3 rounded-3" style="background:#fffef9;border:1px solid #f0efe9;">
+                    <div class="fw-bold mb-1" id="restock-product-name"></div>
+                    <div class="small text-muted">当前库存：<span class="fw-bold" id="restock-current-stock"></span> 件</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">补货数量 <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control form-control-lg" id="restock-amount"
+                           min="1" step="1" placeholder="例如 50" oninput="updateRestockPreview()">
+                    <div class="d-flex gap-1 mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;" onclick="setRestockAmount(10)">+10</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;" onclick="setRestockAmount(50)">+50</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;" onclick="setRestockAmount(100)">+100</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;" onclick="setRestockAmount(500)">+500</button>
+                    </div>
+                    <div class="form-text" id="restock-preview"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">备注（可选）</label>
+                    <input type="text" class="form-control" id="restock-note" placeholder="例如：供应商到货 / 盘点修正">
+                </div>
+
+                <div class="mb-1">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">库存流水</label>
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0"
+                                onclick="loadStockLogs(document.getElementById('restock-product-id').value)">
+                            刷新
+                        </button>
+                    </div>
+                    <div id="restock-logs" style="max-height:200px;overflow-y:auto;">
+                        <div class="text-muted small">加载中...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 px-4 pb-4">
+                <input type="hidden" id="restock-product-id">
+                <button type="button" class="btn btn-outline-dark btn-lg px-4" style="border-radius:12px;" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-dark btn-lg px-5" style="border-radius:12px;" onclick="submitRestock()">
+                    <i class="bi bi-check-lg me-1"></i>确认补货
                 </button>
             </div>
         </div>
@@ -293,6 +400,7 @@ function openEditModal(productId) {
             document.getElementById('edit-stock').value = p.stock;
             document.getElementById('edit-image-url').value = p.image_url || '';
             document.getElementById('edit-description').value = p.description || '';
+            document.getElementById('edit-category').value = p.category || 'lifestyle';
 
             // 触发票预览
             if (p.image_url) {
@@ -314,6 +422,7 @@ function saveEdit() {
     const stock = parseInt(document.getElementById('edit-stock').value);
     const image_url = document.getElementById('edit-image-url').value.trim();
     const description = document.getElementById('edit-description').value.trim();
+    const category = document.getElementById('edit-category').value;
 
     // 前端校验
     if (!name) { showEditError('请输入商品名称'); return; }
@@ -328,7 +437,7 @@ function saveEdit() {
     fetch('/api/product/' + id + '/update', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name, price, stock, image_url, description})
+        body: JSON.stringify({name, price, stock, image_url, description, category})
     })
     .then(r => r.json())
     .then(d => {
@@ -354,9 +463,123 @@ function showEditError(msg) {
     el.classList.remove('d-none');
 }
 
+// ====== 补货 ======
+const restockModal = new bootstrap.Modal(document.getElementById('restockModal'));
+let restockBaseStock = 0;
+
+function openRestockModal(productId, productName, currentStock) {
+    document.getElementById('restock-error').classList.add('d-none');
+    document.getElementById('restock-product-id').value = productId;
+    document.getElementById('restock-product-name').textContent = productName;
+    document.getElementById('restock-current-stock').textContent = currentStock;
+    document.getElementById('restock-amount').value = '';
+    document.getElementById('restock-note').value = '';
+    document.getElementById('restock-preview').textContent = '';
+    document.getElementById('restock-logs').innerHTML = '<div class="text-muted small">加载中...</div>';
+
+    restockBaseStock = parseInt(currentStock) || 0;
+    restockModal.show();
+    loadStockLogs(productId);
+}
+
+function setRestockAmount(n) {
+    document.getElementById('restock-amount').value = n;
+    updateRestockPreview();
+}
+
+function updateRestockPreview() {
+    const amount = parseInt(document.getElementById('restock-amount').value);
+    const el = document.getElementById('restock-preview');
+    if (isNaN(amount) || amount <= 0) { el.textContent = ''; return; }
+    el.textContent = '补货后库存：' + restockBaseStock + ' → ' + (restockBaseStock + amount) + ' 件';
+}
+
+function loadStockLogs(productId) {
+    const box = document.getElementById('restock-logs');
+    fetch('/api/product/' + productId + '/stock_logs')
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success || !d.logs.length) {
+                box.innerHTML = '<div class="text-muted small py-2">暂无库存变动记录</div>';
+                return;
+            }
+            box.innerHTML = d.logs.map(l => {
+                const positive = l.change_amount > 0;
+                const color = positive ? '#16a34a' : '#dc2626';
+                const sign = positive ? '+' : '';
+                return '<div class="d-flex justify-content-between align-items-center py-2 border-bottom small">'
+                     + '<div><span class="fw-semibold">' + l.reason_label + '</span>'
+                     + (l.note ? '<span class="text-muted ms-2">' + l.note + '</span>' : '')
+                     + '<div class="text-muted" style="font-size:0.75rem;">' + l.created_at
+                     + (l.operator ? ' · ' + l.operator : '') + '</div></div>'
+                     + '<div class="text-end"><span class="fw-bold" style="color:' + color + ';">'
+                     + sign + l.change_amount + '</span>'
+                     + '<div class="text-muted" style="font-size:0.75rem;">余 ' + l.stock_after + '</div></div>'
+                     + '</div>';
+            }).join('');
+        })
+        .catch(() => { box.innerHTML = '<div class="text-danger small">加载库存流水失败</div>'; });
+}
+
+function submitRestock() {
+    const productId = document.getElementById('restock-product-id').value;
+    const amount = parseInt(document.getElementById('restock-amount').value);
+    const note = document.getElementById('restock-note').value.trim();
+    const errEl = document.getElementById('restock-error');
+
+    errEl.classList.add('d-none');
+    if (isNaN(amount) || amount <= 0) {
+        errEl.textContent = '请输入大于 0 的补货数量';
+        errEl.classList.remove('d-none');
+        return;
+    }
+
+    const btn = document.querySelector('#restockModal .btn-dark');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>提交中...';
+    btn.disabled = true;
+
+    fetch('/api/product/' + productId + '/restock', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({amount: amount, note: note})
+    })
+    .then(r => r.json())
+    .then(d => {
+        btn.innerHTML = orig;
+        btn.disabled = false;
+        if (d.success) {
+            restockModal.hide();
+            location.reload();
+        } else {
+            errEl.textContent = d.message;
+            errEl.classList.remove('d-none');
+        }
+    })
+    .catch(() => {
+        btn.innerHTML = orig;
+        btn.disabled = false;
+        errEl.textContent = '网络错误，请稍后重试';
+        errEl.classList.remove('d-none');
+    });
+}
+
+// ====== 重新上架 ======
+function restoreProduct(productId, productName) {
+    if (!confirm('确定要重新上架「' + productName + '」吗？')) return;
+
+    fetch('/api/product/' + productId + '/restore', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) location.reload();
+        else alert(d.message);
+    })
+    .catch(() => alert('网络错误，请稍后重试'));
+}
+
 // ====== 下架商品 ======
 function deleteProduct(productId, productName) {
-    if (!confirm('确定要下架「' + productName + '」吗？\n\n此操作不可撤销，下架后商品将从首页移除。')) {
+    if (!confirm('确定要下架「' + productName + '」吗？\n\n下架后商品将从首页移除，但不会删除，随时可以点「上架」恢复。')) {
         return;
     }
 
@@ -367,18 +590,10 @@ function deleteProduct(productId, productName) {
     .then(r => r.json())
     .then(d => {
         if (d.success) {
-            const row = document.getElementById('product-row-' + productId);
-            if (row) {
-                row.style.transition = 'opacity 0.3s';
-                row.style.opacity = '0';
-                setTimeout(() => row.remove(), 300);
-            }
-            // 更新数量
-            const countEl = document.querySelector('.section-head .text-muted');
-            if (countEl) {
-                const m = countEl.textContent.match(/\d+/);
-                if (m) countEl.textContent = '共 ' + (parseInt(m[0]) - 1) + ' 件商品';
-            }
+            // 下架是软删除：商品行仍然存在（可以重新上架），
+            // 所以不能再像以前那样把整行移除，否则管理员就找不回它了。
+            // 直接刷新页面，让服务端重新渲染出「已下架」状态。
+            location.reload();
         } else {
             alert(d.message);
         }

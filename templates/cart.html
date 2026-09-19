@@ -23,16 +23,23 @@
                         <i class="bi bi-image"></i>
                     </div>
                     <div class="flex-grow-1 min-w-0">
-                        <h6 class="fw-bold mb-1 text-truncate">{{ item.name }}</h6>
+                        <h6 class="fw-bold mb-1 text-truncate {{ 'text-muted' if not item.is_active }}">{{ item.name }}</h6>
                         <span class="fw-bold" style="color:#dc2626;">¥{{ "%.2f"|format(item.price) }}</span>
-                        {% if item.stock < 10 %}<span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">仅剩{{ item.stock }}件</span>{% endif %}
+                        {% if not item.is_active %}
+                        <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">已下架，无法结算</span>
+                        {% elif item.stock == 0 %}
+                        <span class="badge bg-danger ms-1" style="font-size:0.7rem;">已售罄</span>
+                        {% elif item.stock < 10 %}
+                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">仅剩{{ item.stock }}件</span>
+                        {% endif %}
                     </div>
                     <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                        <button class="qty-btn" data-action="minus"><i class="bi bi-dash"></i></button>
+                        <button class="qty-btn" data-action="minus" {{ 'disabled' if not item.is_active }}><i class="bi bi-dash"></i></button>
                         <input type="number" class="qty-input form-control form-control-sm"
                                value="{{ item.quantity }}" min="1" max="{{ item.stock }}"
-                               data-product-id="{{ item.product_id }}">
-                        <button class="qty-btn" data-action="plus"><i class="bi bi-plus"></i></button>
+                               data-product-id="{{ item.product_id }}"
+                               {{ 'disabled' if not item.is_active }}>
+                        <button class="qty-btn" data-action="plus" {{ 'disabled' if not item.is_active }}><i class="bi bi-plus"></i></button>
                     </div>
                     <div class="text-end flex-shrink-0" style="min-width:80px;">
                         <div class="fw-bold subtotal" style="color:#dc2626;">¥{{ "%.2f"|format(item.subtotal) }}</div>

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}订单 #{{ order.id }} - 臻品汇{% endblock %}
+{% block content %}
+<div class="container py-3" style="max-width:900px;">
+
+    <div class="section-head">
+        <h2><i class="bi bi-receipt me-2" style="color:var(--gold);"></i>订单详情</h2>
+        <a href="{{ url_for('orders') }}" class="btn btn-sm btn-outline-dark" style="border-radius:8px;">
+            <i class="bi bi-arrow-left me-1"></i>返回我的订单
+        </a>
+    </div>
+
+    {% set badge = {'paid':'bg-success','shipped':'bg-info text-dark','completed':'bg-primary','pending':'bg-warning text-dark','cancelled':'bg-secondary'} %}
+
+    <!-- ====== 订单头部 ====== -->
+    <div class="card-elevated p-4 mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-start mb-3 pb-3 border-bottom">
+            <div>
+                <h5 class="mb-2">订单号 #{{ order.id }}</h5>
+                <span class="badge {{ badge.get(order.status, 'bg-secondary') }} me-2">{{ order.status_label }}</span>
+                <span class="text-muted small">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+            <span class="fw-bold" style="font-size:1.6rem;color:#dc2626;">¥{{ "%.2f"|format(order.total_amount) }}</span>
+        </div>
+
+        <!-- 进度条 -->
+        {% set steps = [('paid','已支付','bi-cash-coin'), ('shipped','已发货','bi-truck'), ('completed','已完成','bi-check2-circle')] %}
+        {% if order.status == 'cancelled' %}
+        <div class="alert alert-secondary border-0 mb-0" style="border-radius:12px;">
+            <i class="bi bi-x-circle me-2"></i>该订单已取消，商品数量已加回库存。
+        </div>
+        {% else %}
+        {% set current_idx = {'pending':0,'paid':0,'shipped':1,'completed':2}.get(order.status, 0) %}
+        <div class="d-flex align-items-center justify-content-between">
+            {% for key, label, icon in steps %}
+            <div class="text-center flex-grow-1">
+                <div class="mx-auto d-flex align-items-center justify-content-center rounded-circle"
+                     style="width:40px;height:40px;
+                            background:{{ '#111' if loop.index0 <= current_idx else '#f0efe9' }};
+                            color:{{ '#fff' if loop.index0 <= current_idx else '#aaa' }};">
+                    <i class="bi {{ icon }}"></i>
+                </div>
+                <div class="small mt-1 {{ 'fw-bold' if loop.index0 <= current_idx else 'text-muted' }}">{{ label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ====== 商品明细 ====== -->
+    <div class="card-elevated p-0 overflow-hidden mb-3">
+        <div class="px-4 py-3 border-bottom"><h6 class="mb-0 fw-bold">商品明细</h6></div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="padding-left:1.2rem;">商品名称</th>
+                        <th class="text-end">单价</th>
+                        <th class="text-center">数量</th>
+                        <th class="text-end" style="padding-right:1.2rem;">小计</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td style="padding-left:1.2rem;">{{ item.product_name }}</td>
+                        <td class="text-end">¥{{ "%.2f"|format(item.price) }}</td>
+                        <td class="text-center">×{{ item.quantity }}</td>
+                        <td class="text-end fw-bold" style="color:#dc2626;padding-right:1.2rem;">
+                            ¥{{ "%.2f"|format(item.subtotal) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold" style="padding-left:1.2rem;">合计</td>
+                        <td class="text-end fw-bold" style="color:#dc2626;font-size:1.1rem;padding-right:1.2rem;">
+                            ¥{{ "%.2f"|format(order.total_amount) }}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- ====== 收货信息 ====== -->
+    <div class="card-elevated p-4 mb-3">
+        <div class="row small">
+            <div class="col-md-6 mb-2">
+                <div class="text-muted mb-1"><i class="bi bi-geo-alt me-1"></i>收货地址</div>
+                <div class="fw-semibold">{{ order.address }}</div>
+            </div>
+            <div class="col-md-6 mb-2">
+                <div class="text-muted mb-1"><i class="bi bi-credit-card me-1"></i>支付方式</div>
+                <div class="fw-semibold">
+                    {% if order.payment_method == 'wechat' %}微信支付
+                    {% elif order.payment_method == 'alipay' %}支付宝
+                    {% else %}{{ order.payment_method }}{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if can_cancel %}
+    <div class="text-end">
+        <button class="btn btn-outline-danger px-4" style="border-radius:12px;" id="cancel-btn"
+                onclick="cancelOrder()">
+            <i class="bi bi-x-circle me-1"></i>取消订单
+        </button>
+        <div class="form-text">取消后订单内商品的数量会自动加回库存。</div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if can_cancel %}
+<script>
+function cancelOrder() {
+    if (!confirm('确定要取消订单 #{{ order.id }} 吗？\n\n订单内商品的数量会自动加回库存。')) return;
+
+    const btn = document.getElementById('cancel-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>处理中...';
+    btn.disabled = true;
+
+    fetch('/api/order/{{ order.id }}/cancel', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                location.reload();
+            } else {
+                btn.innerHTML = orig;
+                btn.disabled = false;
+                alert(d.message);
+            }
+        })
+        .catch(() => {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+            alert('网络错误，请稍后重试');
+        });
+}
+</script>
+{% endif %}
+{% endblock %}

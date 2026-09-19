@@ -13,6 +13,8 @@
                 {% if success %}<div class="alert alert-success border-0" style="border-radius:10px;">{{ success }}</div>{% endif %}
                 {% if error %}<div class="alert alert-danger border-0" style="border-radius:10px;"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>{% endif %}
                 <form method="POST" action="{{ url_for('login') }}">
+                    {# 登录后回跳到用户本来想访问的页面 #}
+                    <input type="hidden" name="next" value="{{ next or '' }}">
                     <div class="mb-3">
                         <label class="form-label">用户名</label>
                         <input type="text" class="form-control" name="username" placeholder="请输入用户名" required autofocus>

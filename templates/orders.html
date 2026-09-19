@@ -16,11 +16,18 @@
                     <div>
                         <span class="text-muted small me-3">订单号：<strong>{{ order.id }}</strong></span>
                         <span class="text-muted small me-3">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-                        <span class="badge {% if order.status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}" style="font-size:0.75rem;">
-                            {% if order.status == 'paid' %}已支付{% elif order.status == 'pending' %}待支付{% else %}{{ order.status }}{% endif %}
+                        {% set badge = {'paid':'bg-success','shipped':'bg-info text-dark','completed':'bg-primary','pending':'bg-warning text-dark','cancelled':'bg-secondary'} %}
+                        <span class="badge {{ badge.get(order.status, 'bg-secondary') }}" style="font-size:0.75rem;">
+                            {{ status_labels.get(order.status, order.status) }}
                         </span>
                     </div>
-                    <span class="fw-bold" style="font-size:1.3rem;color:#dc2626;">¥{{ "%.2f"|format(order.total_amount) }}</span>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="fw-bold" style="font-size:1.3rem;color:#dc2626;">¥{{ "%.2f"|format(order.total_amount) }}</span>
+                        <a href="{{ url_for('order_detail', order_id=order.id) }}"
+                           class="btn btn-sm btn-outline-dark" style="border-radius:8px;">
+                            详情<i class="bi bi-chevron-right ms-1"></i>
+                        </a>
+                    </div>
                 </div>
 
                 <!-- 订单明细 -->

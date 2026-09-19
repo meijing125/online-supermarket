@@ -1,98 +1,120 @@
--- ============================================
--- 网上超市商城系统 - 数据库初始化脚本
--- 使用方法：mysql -u root -p < init.sql
--- ============================================
+-- ============================================================================
+-- 臻品汇数码奢品商城 —— 参考 DDL（MySQL 语法）
+--
+-- ⚠️ 这个文件**不参与程序运行**。
+--    应用实际用的是 SQLite，建表逻辑在 db.py 的 create_tables() 里，
+--    那才是唯一的权威定义。本文件只是为了课程报告/答辩时能一眼看清表结构，
+--    以及万一要迁回 MySQL 时有个起点。
+--
+--    两边字段保持一致（含 is_active、category、stock_logs 与 5 种订单状态）。
+--    改 db.py 的表结构时请顺手同步这里，否则又会变成一份骗人的文档。
+--
+-- 历史提醒：旧版这个文件里的 INSERT 语句，description 字段没加引号，
+--    直接 `mysql < init.sql` 会语法报错；那批种子数据现在由 db.py 的
+--    seed_products() 负责，所以这里只放结构，不放数据。
+-- ============================================================================
 
--- 创建数据库（使用UTF8MB4字符集以支持中文和Emoji）
-CREATE DATABASE IF NOT EXISTS supermarket
-    DEFAULT CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
+-- CREATE DATABASE IF NOT EXISTS supermarket
+--   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE supermarket;
 
-USE supermarket;
-
--- ============================================
--- 1. 用户表 (users)
--- 密码使用PBKDF2-SHA256哈希加密存储（在应用层完成）
--- ============================================
+-- ---------------------------------------------------------------------------
+-- 用户表
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '用户ID',
-    username VARCHAR(50) NOT NULL UNIQUE COMMENT '用户名',
-    password_hash VARCHAR(255) NOT NULL COMMENT 'PBKDF2-SHA256加密后的密码',
-    is_admin TINYINT(1) DEFAULT 0 COMMENT '是否管理员：0=否, 1=是',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    username      VARCHAR(50)  NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,          -- "salt_hex:key_hex"（PBKDF2-SHA256）
+    is_admin      TINYINT(1)   NOT NULL DEFAULT 0,
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================
--- 2. 商品表 (products)
--- ============================================
+-- ---------------------------------------------------------------------------
+-- 商品表
+--   category  数码 digital / 奢品 luxury / 生活 lifestyle
+--   is_active 软删除标记：0 = 已下架。不用 DELETE 是因为 order_items.product_id
+--             是指向本表的外键，商品一旦被下过单就删不掉（外键约束报错）。
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS products (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '商品ID',
-    name VARCHAR(200) NOT NULL COMMENT '商品名称',
-    price DECIMAL(10,2) NOT NULL COMMENT '商品价格（元）',
-    stock INT NOT NULL DEFAULT 0 COMMENT '库存数量',
-    image_url VARCHAR(500) DEFAULT '' COMMENT '商品图片URL',
-    description TEXT COMMENT '商品描述',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '上架时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品表';
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(200)   NOT NULL,
+    price       DECIMAL(10, 2) NOT NULL,
+    stock       INT            NOT NULL DEFAULT 0,
+    image_url   VARCHAR(500)   DEFAULT '',
+    description TEXT,
+    category    VARCHAR(20)    NOT NULL DEFAULT 'lifestyle',
+    is_active   TINYINT(1)     NOT NULL DEFAULT 1,
+    created_at  TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_products_active_category (is_active, category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================
--- 3. 购物车表 (carts)
--- 同一用户对同一商品只能有一条记录，通过UNIQUE约束保证
--- ============================================
+-- ---------------------------------------------------------------------------
+-- 购物车表（同一用户对同一商品只保留一条记录）
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS carts (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '购物车记录ID',
-    user_id INT NOT NULL COMMENT '用户ID',
-    product_id INT NOT NULL COMMENT '商品ID',
-    quantity INT NOT NULL DEFAULT 1 COMMENT '数量',
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-    UNIQUE KEY uk_user_product (user_id, product_id) COMMENT '同一用户对同一商品唯一'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='购物车表';
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity   INT NOT NULL DEFAULT 1,
+    UNIQUE KEY uk_cart_user_product (user_id, product_id),
+    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================
--- 4. 订单表 (orders)
--- ============================================
+-- ---------------------------------------------------------------------------
+-- 订单表
+--   状态流转：pending → paid → shipped → completed
+--             未完成状态可 → cancelled（取消时商品数量加回库存）
+--   目前 checkout 下单直接写入 paid。
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS orders (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '订单ID',
-    user_id INT NOT NULL COMMENT '用户ID',
-    total_amount DECIMAL(10,2) NOT NULL COMMENT '订单总金额',
-    status VARCHAR(20) DEFAULT 'pending' COMMENT '订单状态: pending=待支付, paid=已支付',
-    address VARCHAR(500) DEFAULT '' COMMENT '收货地址',
-    payment_method VARCHAR(50) DEFAULT '' COMMENT '支付方式: wechat=微信, alipay=支付宝',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
-    FOREIGN KEY (user_id) REFERENCES users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT            NOT NULL,
+    total_amount   DECIMAL(10, 2) NOT NULL,
+    status         VARCHAR(20)    DEFAULT 'pending',
+    address        VARCHAR(500)   DEFAULT '',
+    payment_method VARCHAR(20)    DEFAULT '',
+    created_at     TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_orders_user (user_id, created_at),
+    INDEX idx_orders_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================
--- 5. 订单明细表 (order_items)
--- 记录每笔订单中每个商品的购买详情
--- ============================================
+-- ---------------------------------------------------------------------------
+-- 订单明细表
+--   product_name / price 是下单当时的快照：商品之后改名或调价，
+--   历史订单显示的仍是下单时的信息。
+--   product_id 不设 ON DELETE，配合 products.is_active 软删除使用。
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS order_items (
-    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '明细ID',
-    order_id INT NOT NULL COMMENT '订单ID',
-    product_id INT NOT NULL COMMENT '商品ID',
-    product_name VARCHAR(200) NOT NULL COMMENT '商品名称（快照）',
-    price DECIMAL(10,2) NOT NULL COMMENT '购买时单价',
-    quantity INT NOT NULL COMMENT '购买数量',
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单明细表';
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    order_id     INT            NOT NULL,
+    product_id   INT            NOT NULL,
+    product_name VARCHAR(200)   NOT NULL,
+    price        DECIMAL(10, 2) NOT NULL,
+    quantity     INT            NOT NULL,
+    FOREIGN KEY (order_id)   REFERENCES orders(id)   ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_order_items_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================
--- 示例商品数据
--- 注：管理员账户由应用首次启动时自动创建
---     默认账号: admin / 密码: admin123
--- ============================================
-INSERT INTO products (name, price, stock, image_url, description) VALUES
-('iPhone 16 Pro Max 256GB', 9999.00, 50, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=iPhone%2016%20Pro%20Max%20256GB', Apple iPhone 16 Pro Max，256GB存储，钛金属原色，A18 Pro芯片,
-('MacBook Air M4 13英寸', 8999.00, 30, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=MacBook%20Air%20M4%2013%E8%8B%B1%E5%AF%B8', Apple MacBook Air M4芯片，13.6英寸，16GB/256GB，午夜色,
-('AirPods Pro 3', 1899.00, 80, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=AirPods%20Pro%203', Apple AirPods Pro 第三代，主动降噪，MagSafe充电盒,
-('Sony WH-1000XM6 头戴耳机', 2499.00, 40, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Sony%20WH-1000XM6%20%E5%A4%B4%E6%88%B4%E8%80%B3%E6%9C%BA', 索尼旗舰无线降噪头戴耳机，30小时续航，Hi-Res认证,
-('LV Neverfull MM 经典手袋', 12500.00, 15, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=LV%20Neverfull%20MM%20%E7%BB%8F%E5%85%B8%E6%89%8B%E8%A2%8B', Louis Vuitton Neverfull MM，Monogram帆布托特包,
-('Dior 真我女士香水 100ml', 1580.00, 60, 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=400&h=300&fit=crop', 'Dior J''adore 真我女士淡香精，花香调，100ml'),
-('Hermès 经典H腰带', 6800.00, 25, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Herm%C3%A8s%20%E7%BB%8F%E5%85%B8H%E8%85%B0%E5%B8%A6', Hermès 爱马仕 Collier de Chien H扣腰带，Box小牛皮,
-('Apple Watch Ultra 3', 5999.00, 35, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Apple%20Watch%20Ultra%203', Apple Watch Ultra 3，49mm钛金属，双频GPS,
-('Nintendo Switch OLED', 2599.00, 45, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Nintendo%20Switch%20OLED', 任天堂 Switch OLED款，7英寸屏幕，64GB存储,
-('Dyson V16 Detect 吸尘器', 4999.00, 30, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Dyson%20V16%20Detect%20%E5%90%B8%E5%B0%98%E5%99%A8', 戴森 V16 Detect 无绳吸尘器，激光探测，60分钟续航,
-('Gucci GG Marmont 链条包', 9800.00, 20, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Gucci%20GG%20Marmont%20%E9%93%BE%E6%9D%A1%E5%8C%85', Gucci GG Marmont，绗缝皮革，双G金属logo，斜挎包,
-('Chanel N°5 经典香水', 1680.00, 55, 'https://placehold.co/400x300/1d1d1f/c9a04c?text=Chanel%20N%C2%B05%20%E7%BB%8F%E5%85%B8%E9%A6%99%E6%B0%B4', Chanel N°5 五号之水，醛香花香调，100ml经典款;
+-- ---------------------------------------------------------------------------
+-- 库存流水表
+--   每次库存变动都写一条，回答「库存为什么变成这样」。
+--   change_amount 正数=入库（补货/取消回滚），负数=出库（售出）。
+--   stock_after 是变动后的余量快照，方便直接对账。
+--   reason: restock 补货 / order 售出 / order_cancel 取消回滚 / manual 手工编辑
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stock_logs (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    product_id    INT          NOT NULL,
+    product_name  VARCHAR(200) NOT NULL DEFAULT '',
+    change_amount INT          NOT NULL,
+    stock_after   INT          NOT NULL,
+    reason        VARCHAR(20)  NOT NULL DEFAULT 'manual',
+    note          VARCHAR(255) DEFAULT '',
+    operator      VARCHAR(50)  DEFAULT '',
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_stock_logs_product (product_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

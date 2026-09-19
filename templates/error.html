@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} - 臻品汇{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width:640px;">
+    <div class="card-elevated p-5 text-center">
+        <div style="font-size:4.5rem;font-weight:800;line-height:1;color:var(--gold);">{{ code }}</div>
+        <h4 class="mt-3 mb-2">{{ message }}</h4>
+        <p class="text-muted mb-4">
+            {% if code == 404 %}你访问的页面不存在，可能是链接输错了或商品已下架。
+            {% elif code == 403 %}当前账号没有访问该页面的权限，请用管理员账号登录。
+            {% else %}服务器开小差了，请稍后重试。{% endif %}
+        </p>
+        <div class="d-flex gap-2 justify-content-center">
+            <a href="{{ url_for('index') }}" class="btn btn-dark px-4" style="border-radius:12px;">
+                <i class="bi bi-shop me-2"></i>返回首页
+            </a>
+            {% if not session.user_id %}
+            <a href="{{ url_for('login') }}" class="btn btn-outline-dark px-4" style="border-radius:12px;">
+                <i class="bi bi-box-arrow-in-right me-2"></i>去登录
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

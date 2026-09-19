@@ -27,25 +27,53 @@
 <div class="py-4">
 <div class="container-fluid" style="max-width:1400px;">
 
-    <!-- 标题 + 分类 -->
+    <!-- 标题 + 分类（分类改成链接，交给服务端筛选，才能和搜索、分页叠加） -->
     <div class="section-head">
         <h2><i class="bi bi-diamond-fill me-2"></i>精选好物</h2>
         <div class="filter-tabs">
-            <button class="filter-tab active" data-filter="all">全部</button>
-            <button class="filter-tab" data-filter="digital"><i class="bi bi-phone me-1"></i>数码</button>
-            <button class="filter-tab" data-filter="luxury"><i class="bi bi-gem me-1"></i>奢品</button>
-            <button class="filter-tab" data-filter="lifestyle"><i class="bi bi-house-heart me-1"></i>生活</button>
+            {% set cat_icons = {'digital':'bi-phone','luxury':'bi-gem','lifestyle':'bi-house-heart'} %}
+            <a href="{{ url_for('index', q=keyword) }}"
+               class="filter-tab {{ 'active' if not current_category }}">
+                全部 <span class="filter-count">{{ total_active }}</span>
+            </a>
+            {% for key, label in categories.items() %}
+            <a href="{{ url_for('index', cat=key, q=keyword) }}"
+               class="filter-tab {{ 'active' if current_category == key }}">
+                <i class="bi {{ cat_icons.get(key, 'bi-tag') }} me-1"></i>{{ label }}
+                <span class="filter-count">{{ category_counts.get(key, 0) }}</span>
+            </a>
+            {% endfor %}
         </div>
+    </div>
+
+    <!-- 搜索 + 结果计数 -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="text-muted small">
+            {% if total_count %}
+                共 {{ total_count }} 件商品{% if keyword %}，匹配「{{ keyword }}」{% endif %}
+                {% if total_pages > 1 %}（第 {{ page }}/{{ total_pages }} 页）{% endif %}
+            {% endif %}
+        </div>
+        <form class="d-flex gap-2" method="get" action="{{ url_for('index') }}">
+            {% if current_category %}<input type="hidden" name="cat" value="{{ current_category }}">{% endif %}
+            <input type="text" name="q" class="form-control form-control-sm"
+                   style="border-radius:8px;min-width:220px;"
+                   placeholder="搜索商品名称或描述" value="{{ keyword }}">
+            <button class="btn btn-sm btn-dark px-3" style="border-radius:8px;">
+                <i class="bi bi-search"></i>
+            </button>
+            {% if keyword %}
+            <a href="{{ url_for('index', cat=current_category) }}"
+               class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">清除</a>
+            {% endif %}
+        </form>
     </div>
 
     <!-- 商品网格 -->
     {% if products %}
     <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4" id="product-grid">
         {% for product in products %}
-        {% set cat = 'lifestyle' %}
-        {% if 'iPhone' in product.name or 'MacBook' in product.name or 'AirPods' in product.name or 'Sony' in product.name or 'Watch' in product.name or 'Switch' in product.name %}{% set cat = 'digital' %}{% endif %}
-        {% if 'LV' in product.name or 'Dior' in product.name or 'Herm' in product.name or 'Gucci' in product.name or 'Chanel' in product.name %}{% set cat = 'luxury' %}{% endif %}
-        <div class="col" data-category="{{ cat }}">
+        <div class="col" data-category="{{ product.category }}">
             <div class="product-card h-100 d-flex flex-column">
 
                 <!-- 图片 -->
@@ -103,10 +131,39 @@
         </div>
         {% endfor %}
     </div>
+    <!-- 分页 -->
+    {% if total_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center mb-0">
+            <li class="page-item {{ 'disabled' if page <= 1 }}">
+                <a class="page-link" href="{{ url_for('index', q=keyword, cat=current_category, page=page-1) }}">上一页</a>
+            </li>
+            {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {{ 'active' if p == page }}">
+                <a class="page-link" href="{{ url_for('index', q=keyword, cat=current_category, page=p) }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+            <li class="page-item {{ 'disabled' if page >= total_pages }}">
+                <a class="page-link" href="{{ url_for('index', q=keyword, cat=current_category, page=page+1) }}">下一页</a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+
     {% else %}
     <div class="text-center py-5">
         <i class="bi bi-inbox display-3" style="color:#d1d5db;"></i>
+        {% if keyword or current_category %}
+        <h4 class="mt-3" style="color:var(--sub);">没有找到符合条件的商品</h4>
+        <p class="text-muted">
+            {% if keyword %}换个关键词试试，或{% endif %}查看全部商品
+        </p>
+        <a href="{{ url_for('index') }}" class="btn btn-dark mt-2" style="border-radius:12px;">
+            <i class="bi bi-grid me-2"></i>查看全部商品
+        </a>
+        {% else %}
         <h4 class="mt-3" style="color:var(--sub);">暂无商品，敬请期待新品上架</h4>
+        {% endif %}
     </div>
     {% endif %}
 </div></div>
@@ -176,17 +233,8 @@
     // 关闭：按 ESC
     document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && overlay.classList.contains('open')) closeQv(); });
 
-    // ===== 分类筛选 =====
-    document.querySelectorAll('.filter-tab').forEach(function(tab){
-        tab.addEventListener('click', function(){
-            document.querySelectorAll('.filter-tab').forEach(function(t){ t.classList.remove('active'); });
-            this.classList.add('active');
-            var f = this.dataset.filter;
-            document.querySelectorAll('#product-grid > .col').forEach(function(col){
-                col.style.display = (f === 'all' || col.dataset.category === f) ? '' : 'none';
-            });
-        });
-    });
+    // 分类筛选已改为服务端（见 index() 的 cat 参数），这里不再需要 JS 过滤：
+    // 原来的 display:none 只能过滤当前页已渲染的商品，和搜索/分页组合就会出错。
 
     // ===== 加入购物车 =====
     function addToCart(el) {

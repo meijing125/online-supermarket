@@ -222,12 +222,27 @@ main { flex: 1; }
     font-size: 0.82rem;
     cursor: pointer;
     transition: all 0.2s;
+    text-decoration: none;   /* 分类标签现在是 <a> 链接 */
+    white-space: nowrap;
 }
-.filter-tab:hover { color: var(--text); }
+.filter-tab:hover { color: var(--text); text-decoration: none; }
 .filter-tab.active {
     background: var(--dark);
     color: #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.filter-tab.active:hover { color: #fff; }
+/* 分类标签上的商品数角标 */
+.filter-count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.08);
+    font-size: 0.72rem;
+}
+.filter-tab.active .filter-count {
+    background: rgba(255,255,255,0.22);
 }
 
 /* ===== 商品卡片 ===== */

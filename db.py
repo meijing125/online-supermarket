@@ -166,6 +166,10 @@ def create_tables():
     ''')
 
     # --- 创建 products 商品表 ---
+    # is_active 用于「软删除」：0 表示已下架。
+    # 为什么不用 DELETE：order_items.product_id 是指向 products 的外键，
+    # 商品一旦被下过单就无法物理删除（会触发 FOREIGN KEY constraint failed）。
+    # 改成软删除后，下架不再影响历史订单，也不会 500。
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +178,8 @@ def create_tables():
             stock       INTEGER NOT NULL DEFAULT 0,
             image_url   TEXT    DEFAULT '',
             description TEXT,
+            category    TEXT    NOT NULL DEFAULT 'lifestyle',
+            is_active   INTEGER NOT NULL DEFAULT 1,
             created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -220,9 +226,107 @@ def create_tables():
         )
     ''')
 
+    # --- 创建 stock_logs 库存流水表 ---
+    # 记录每一次库存变动，用于回答「库存为什么变了」。
+    # change_amount 正数=补货入库，负数=售出出库。
+    # stock_after 存变动后的库存快照，方便直接看出当时的余量。
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stock_logs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id    INTEGER NOT NULL,
+            product_name  TEXT    NOT NULL DEFAULT '',
+            change_amount INTEGER NOT NULL,
+            stock_after   INTEGER NOT NULL,
+            reason        TEXT    NOT NULL DEFAULT 'manual',
+            note          TEXT    DEFAULT '',
+            operator      TEXT    DEFAULT '',
+            created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        )
+    ''')
+    cursor.execute(
+        'CREATE INDEX IF NOT EXISTS idx_stock_logs_product ON stock_logs(product_id, created_at DESC)'
+    )
+
+    # --- 增量迁移：为老数据库补上后加的列 ---
+    # create_tables() 只对新库生效，已经存在的 supermarket.db 不会因为
+    # CREATE TABLE IF NOT EXISTS 而多出新列，所以这里显式补列。
+    _ensure_column(cursor, 'products', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
+
+    # category 是新加的列。补列后已经是 'lifestyle' 的一律按名称重新归类，
+    # 这样原来那 12 件种子商品的分组和改造前完全一致，不会全部掉进「生活」。
+    if _ensure_column(cursor, 'products', 'category',
+                      "TEXT NOT NULL DEFAULT 'lifestyle'"):
+        cursor.execute('SELECT id, name FROM products')
+        for row in cursor.fetchall():
+            cursor.execute(
+                'UPDATE products SET category = %s WHERE id = %s',
+                (guess_category(row['name']), row['id'])
+            )
+        print('[迁移] 已为 products.category 回填分类')
+
     conn.commit()
     cursor.close()
     conn.close()
+
+
+def _ensure_column(cursor, table, column, ddl):
+    """
+    幂等地给已有表补列（SQLite 没有 ADD COLUMN IF NOT EXISTS）。
+    返回 True 表示这次确实新增了列，False 表示列本来就存在。
+    调用方据此决定要不要做一次性的数据回填。
+    """
+    cursor.execute('PRAGMA table_info({})'.format(table))
+    if column in {row['name'] for row in cursor.fetchall()}:
+        return False
+    cursor.execute('ALTER TABLE {} ADD COLUMN {} {}'.format(table, column, ddl))
+    print('[迁移] 已为 {} 表新增 {}.{} 列'.format(table, table, column))
+    return True
+
+
+# 商品分类取值。key 存库，value 是界面文案。
+CATEGORIES = {
+    'digital': '数码',
+    'luxury': '奢品',
+    'lifestyle': '生活',
+}
+
+# 按名称猜分类的关键词表。
+# 只有两处会用到：老数据的回填，以及管理员没选分类时的兜底。
+# 这是启发式，不是权威 —— 新商品请让管理员在表单里显式选择分类。
+_CATEGORY_KEYWORDS = {
+    'digital': ('iPhone', 'MacBook', 'AirPods', 'Sony', 'Watch', 'Switch',
+                '手机', '电脑', '耳机', '相机', '平板', '手表'),
+    'luxury': ('LV', 'Dior', 'Herm', 'Gucci', 'Chanel', 'Neverfull',
+               '爱马仕', '香奈儿', '包', '香水', '腰带', '手袋'),
+}
+
+
+def guess_category(name):
+    """按商品名猜一个分类，猜不出就归入 lifestyle。"""
+    text = name or ''
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        if any(k in text for k in keywords):
+            return category
+    return 'lifestyle'
+
+
+def log_stock_change(cursor, product_id, product_name, change_amount,
+                     stock_after, reason, note='', operator=''):
+    """
+    写入一条库存流水。调用方负责 commit（通常和库存变更处于同一事务）。
+
+    reason 取值：
+        restock      管理员补货
+        order        用户下单扣减
+        order_cancel 订单取消回滚
+    """
+    cursor.execute(
+        '''INSERT INTO stock_logs
+           (product_id, product_name, change_amount, stock_after, reason, note, operator)
+           VALUES (%s, %s, %s, %s, %s, %s, %s)''',
+        (product_id, product_name, change_amount, stock_after, reason, note, operator)
+    )
 
 
 def seed_products():
@@ -274,9 +378,11 @@ def seed_products():
              '/static/products/chanel-no5.jpg',
              'Chanel 香奈儿 N°5 五号之水，醛香花香调，玛丽莲·梦露之选，100ml经典款'),
         ]
+        # 分类由名称推导，避免在下面的商品清单里再手写一遍容易写错的分类字段
         cursor.executemany(
-            'INSERT INTO products (name, price, stock, image_url, description) VALUES (%s, %s, %s, %s, %s)',
-            sample_products
+            'INSERT INTO products (name, price, stock, image_url, description, category) '
+            'VALUES (%s, %s, %s, %s, %s, %s)',
+            [row + (guess_category(row[0]),) for row in sample_products]
         )
         conn.commit()
         print('[初始化] 已插入 12 件示例商品')
