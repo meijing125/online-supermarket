@@ -27,9 +27,11 @@ online-supermarket/
 ├── app.py                  # 主程序：路由、业务逻辑、鉴权
 ├── db.py                   # 数据库访问层（SQLite 适配 + 建表 + 初始数据）
 ├── requirements.txt        # 依赖清单
-├── render.yaml             # Render 部署蓝图
+├── render.yaml             # Render 部署蓝图（备选方案）
 ├── .env.example            # 环境变量示例
 ├── init.sql                # 早期 MySQL 版建表脚本（已废弃，保留备查）
+├── deploy/
+│   └── pythonanywhere_wsgi.py   # PythonAnywhere 的 WSGI 入口配置模板
 ├── static/
 │   ├── style.css
 │   └── uploads/            # 用户上传的商品图片
@@ -67,14 +69,38 @@ python app.py
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-## 部署到 Render
+## 部署到线上
 
-1. 把本仓库推送到 GitHub。
-2. 打开 [render.com](https://render.com) → **New** → **Blueprint** → 选择本仓库。
-3. Render 会自动读取 `render.yaml`，点击确认即可。
-   （也可以选 **Web Service** 手动配置：Build Command 填 `pip install -r requirements.txt`，
+### 方案一：PythonAnywhere（推荐）
+
+免费、无需信用卡，**且家目录是持久化的 —— SQLite 数据文件不会随重启丢失**，
+用户、订单、库存都能长期保留。网址形如 `https://你的用户名.pythonanywhere.com`。
+
+1. 注册免费账号：<https://www.pythonanywhere.com/pricing/> → **Create a Beginner account**
+2. 打开 **Consoles** → **Bash**，执行：
+
+   ```bash
+   git clone https://github.com/你的用户名/online-supermarket.git
+   pip install --user flask
+   ```
+
+3. 打开 **Web** → **Add a new web app** → **Manual configuration** → 选 Python 3.10+
+4. 在 Web 页面把 **Source code** 填成 `/home/你的用户名/online-supermarket`，
+   再点 **WSGI configuration file**，把内容整体替换为
+   `deploy/pythonanywhere_wsgi.py` 的内容，并按其注释修改两处（项目路径、SECRET_KEY）
+5. 点 **Reload**，访问 `https://你的用户名.pythonanywhere.com`
+
+> 免费账号每 3 个月需要在 Web 页面点一次续期按钮，否则应用会被暂停。
+
+### 方案二：Render
+
+> 注意：`render.com` 在中国大陆多数网络下无法访问，若你身处大陆请优先用方案一。
+
+1. 打开 [render.com](https://render.com) → **New** → **Blueprint** → 选择本仓库。
+2. Render 会自动读取仓库根目录的 `render.yaml`，点击确认即可。
+   （或选 **Web Service** 手动配置：Build Command 填 `pip install -r requirements.txt`，
    Start Command 填 `gunicorn --workers 1 --threads 4 --bind 0.0.0.0:$PORT app:app`。）
-4. 部署完成后 Render 会给出一个 `https://xxx.onrender.com` 的公开网址，任何人都能打开。
+3. 部署完成后会得到一个 `https://xxx.onrender.com` 的公开网址。
 
 ## 已知限制
 
