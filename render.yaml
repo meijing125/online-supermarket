@@ -1,0 +1,19 @@
+# Render 部署蓝图
+# 用法：把仓库推到 GitHub 后，在 Render 上选择 "New > Blueprint"，选中本仓库即可，
+# 下面的配置会被自动读取，无需手工填写。
+
+services:
+  - type: web
+    name: online-supermarket
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # SQLite 是单写者模型，多 worker 并发写同一个数据库文件会报 "database is locked"，
+    # 因此这里固定 1 个 worker，用多线程处理并发请求。
+    startCommand: gunicorn --workers 1 --threads 4 --bind 0.0.0.0:$PORT app:app
+    envVars:
+      # Render 会自动生成一个随机密钥，保证重启后登录状态不丢失
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.12.10"

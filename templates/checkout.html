@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}确认订单 - 臻品汇{% endblock %}
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1400px;">
+    <div class="section-head">
+        <h2><i class="bi bi-credit-card-fill me-2" style="color:var(--gold);"></i>确认订单</h2>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger border-0 shadow-sm" style="border-radius:12px;"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <form method="POST" action="{{ url_for('checkout') }}" id="checkout-form">
+                <div class="card-elevated p-4 mb-3">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-geo-alt-fill me-2" style="color:var(--gold);"></i>收货地址</h5>
+                    <textarea class="form-control" id="address" name="address" rows="3"
+                              placeholder="收货人姓名、电话及详细地址" required></textarea>
+                </div>
+                <div class="card-elevated p-4 mb-3">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-wallet2 me-2" style="color:var(--gold);"></i>支付方式</h5>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-wechat" value="wechat" required>
+                            <label class="btn pay-option w-100 py-3 text-center" for="pay-wechat" onclick="showQr('wechat')">
+                                <i class="bi bi-wechat fs-2 d-block" style="color:#07c160;"></i>
+                                <span class="fw-semibold small">微信支付</span>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-alipay" value="alipay" required>
+                            <label class="btn pay-option w-100 py-3 text-center" for="pay-alipay" onclick="showQr('alipay')">
+                                <i class="bi bi-alipay fs-2 d-block" style="color:#1677ff;"></i>
+                                <span class="fw-semibold small">支付宝</span>
+                            </label>
+                        </div>
+                    </div>
+                    <!-- 微信收款码 -->
+                    <div id="wechat-qr" class="text-center mt-3 d-none">
+                        <hr>
+                        <p class="fw-bold mb-2" style="color:#07c160;">
+                            <i class="bi bi-wechat me-1"></i>请使用微信扫码支付
+                        </p>
+                        <img src="{{ url_for('static', filename='wechat_qr.jpg') }}"
+                             alt="微信收款码"
+                             class="rounded-3 shadow-sm"
+                             style="max-width:260px;width:100%;">
+                        <p class="text-muted small mt-2 mb-0">
+                            扫码支付后，请点击下方「确认支付」提交订单
+                        </p>
+                    </div>
+                    <!-- 支付宝提示 -->
+                    <div id="alipay-hint" class="text-center mt-3 d-none">
+                        <hr>
+                        <p class="fw-bold mb-0" style="color:#1677ff;">
+                            <i class="bi bi-alipay me-1"></i>支付宝功能开发中，敬请期待
+                        </p>
+                    </div>
+                </div>
+                <div class="d-grid d-lg-none">
+                    <button type="submit" class="btn btn-dark btn-lg" style="border-radius:12px;">
+                        <i class="bi bi-check-circle me-2"></i>确认支付 ¥{{ "%.2f"|format(total) }}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card-elevated p-4 sticky-top" style="top:80px;">
+                <h5 class="fw-bold mb-3">🧾 订单明细</h5>
+                {% for item in items %}
+                <div class="d-flex align-items-center gap-3 mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                    <img src="{{ item.image_url }}" class="rounded-3 flex-shrink-0"
+                         style="width:55px;height:55px;object-fit:cover;background:#f0efe9;"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='';">
+                    <div class="rounded-3 flex-shrink-0 d-flex align-items-center justify-content-center"
+                         style="width:55px;height:55px;background:#f0efe9;display:none;color:#ccc;">
+                        <i class="bi bi-image"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <h6 class="mb-0 fw-semibold small text-truncate">{{ item.name }}</h6>
+                        <small class="text-muted">×{{ item.quantity }}</small>
+                    </div>
+                    <span class="fw-bold flex-shrink-0" style="color:#dc2626;">¥{{ "%.2f"|format(item.subtotal) }}</span>
+                </div>
+                {% endfor %}
+                <hr>
+                <div class="d-flex justify-content-between mb-2"><span class="text-muted">商品小计</span><span>¥{{ "%.2f"|format(total) }}</span></div>
+                <div class="d-flex justify-content-between mb-2"><span class="text-muted">运费</span><span style="color:var(--green);">免运费</span></div>
+                <hr>
+                <div class="d-flex justify-content-between"><span class="fw-bold fs-5">应付总额</span><span class="fw-bold" style="font-size:1.6rem;color:#dc2626;">¥{{ "%.2f"|format(total) }}</span></div>
+                <div class="d-none d-lg-grid mt-4">
+                    <button type="submit" form="checkout-form" class="btn btn-dark btn-lg" style="border-radius:12px;">
+                        <i class="bi bi-check-circle me-2"></i>确认支付
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="text-center mt-3"><a href="{{ url_for('cart') }}" class="text-muted"><i class="bi bi-arrow-left me-1"></i>返回购物车</a></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 支付方式切换：显示对应的二维码或提示
+function showQr(method) {
+    document.getElementById('wechat-qr').classList.toggle('d-none', method !== 'wechat');
+    document.getElementById('alipay-hint').classList.toggle('d-none', method !== 'alipay');
+}
+
+// 监听 radio 变化（点击 label 时也会触发 radio change）
+document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        showQr(this.value);
+    });
+});
+
+document.getElementById('checkout-form').addEventListener('submit',function(e){
+    if(!document.getElementById('address').value.trim()){ e.preventDefault(); alert('请输入收货地址'); return; }
+    if(!document.querySelector('input[name="payment_method"]:checked')){ e.preventDefault(); alert('请选择支付方式'); return; }
+    if(!confirm('确认提交订单？总金额：¥{{ "%.2f"|format(total) }}')) e.preventDefault();
+});
+</script>
+{% endblock %}

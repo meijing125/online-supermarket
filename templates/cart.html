@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}购物车 - 臻品汇{% endblock %}
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1400px;">
+    <div class="section-head">
+        <h2><i class="bi bi-bag-fill me-2" style="color:var(--gold);"></i>我的购物车</h2>
+    </div>
+
+    {% if items %}
+    <div class="row g-4">
+        <!-- 商品列表 -->
+        <div class="col-lg-8">
+            <div class="card-elevated p-0 overflow-hidden">
+                {% for item in items %}
+                <div class="cart-row p-3 p-md-4 d-flex align-items-center gap-3 {% if not loop.last %}border-bottom{% endif %}"
+                     data-product-id="{{ item.product_id }}">
+                    <img src="{{ item.image_url }}"
+                         class="rounded-3 flex-shrink-0"
+                         style="width:80px;height:80px;object-fit:cover;background:#f0efe9;"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='';">
+                    <div class="rounded-3 flex-shrink-0 d-flex align-items-center justify-content-center"
+                         style="width:80px;height:80px;background:#f0efe9;display:none;color:#ccc;font-size:2rem;">
+                        <i class="bi bi-image"></i>
+                    </div>
+                    <div class="flex-grow-1 min-w-0">
+                        <h6 class="fw-bold mb-1 text-truncate">{{ item.name }}</h6>
+                        <span class="fw-bold" style="color:#dc2626;">¥{{ "%.2f"|format(item.price) }}</span>
+                        {% if item.stock < 10 %}<span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">仅剩{{ item.stock }}件</span>{% endif %}
+                    </div>
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                        <button class="qty-btn" data-action="minus"><i class="bi bi-dash"></i></button>
+                        <input type="number" class="qty-input form-control form-control-sm"
+                               value="{{ item.quantity }}" min="1" max="{{ item.stock }}"
+                               data-product-id="{{ item.product_id }}">
+                        <button class="qty-btn" data-action="plus"><i class="bi bi-plus"></i></button>
+                    </div>
+                    <div class="text-end flex-shrink-0" style="min-width:80px;">
+                        <div class="fw-bold subtotal" style="color:#dc2626;">¥{{ "%.2f"|format(item.subtotal) }}</div>
+                        <button class="btn btn-sm text-muted delete-btn mt-1 border-0"
+                                data-product-id="{{ item.product_id }}"
+                                data-product-name="{{ item.name }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 汇总 -->
+        <div class="col-lg-4">
+            <div class="card-elevated p-4 sticky-top" style="top:80px;">
+                <h5 class="fw-bold mb-3">📋 订单汇总</h5>
+                <hr>
+                <div class="d-flex justify-content-between mb-2"><span class="text-muted">商品总数</span><span class="fw-bold">{{ items|length }} 件</span></div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span class="text-muted">商品总价</span>
+                    <span class="fw-bold" style="font-size:1.5rem;color:#dc2626;" id="cart-total">¥{{ "%.2f"|format(total) }}</span>
+                </div>
+                <hr>
+                <a href="{{ url_for('checkout') }}" class="btn btn-dark btn-lg w-100 mb-2" style="border-radius:12px;">
+                    <i class="bi bi-credit-card me-2"></i>去结算
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-dark w-100" style="border-radius:12px;">
+                    <i class="bi bi-arrow-left me-2"></i>继续购物
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-bag-x display-3" style="color:#d1d5db;"></i>
+        <h4 class="mt-3" style="color:var(--sub);">购物车是空的</h4>
+        <p class="text-muted mb-4">快去挑选心仪好物吧</p>
+        <a href="{{ url_for('index') }}" class="btn btn-dark btn-lg px-5" style="border-radius:12px;">
+            <i class="bi bi-shop me-2"></i>去逛逛
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if items %}
+<script>
+(function(){
+    function updateItem(productId, quantity, row) {
+        fetch('/api/cart/update', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({product_id:parseInt(productId),quantity})
+        })
+        .then(r=>r.json())
+        .then(d=>{
+            if(d.success){
+                row.querySelector('.qty-input').value = d.quantity;
+                row.querySelector('.subtotal').textContent = '¥'+d.subtotal.toFixed(2);
+                document.getElementById('cart-total').textContent = '¥'+d.total.toFixed(2);
+                updateCartBadge();
+                if(d.quantity===0){ row.remove(); if(!document.querySelectorAll('.cart-row').length) location.reload(); }
+            } else alert(d.message);
+        });
+    }
+
+    document.querySelectorAll('.qty-btn[data-action="minus"]').forEach(b=>{
+        b.addEventListener('click',function(){
+            const row=this.closest('.cart-row'), inp=row.querySelector('.qty-input');
+            let q=Math.max(1,parseInt(inp.value)-1); inp.value=q;
+            updateItem(row.dataset.productId,q,row);
+        });
+    });
+    document.querySelectorAll('.qty-btn[data-action="plus"]').forEach(b=>{
+        b.addEventListener('click',function(){
+            const row=this.closest('.cart-row'), inp=row.querySelector('.qty-input');
+            let q=parseInt(inp.value)+1;
+            if(q>parseInt(inp.max)){ alert('库存不足'); return; }
+            inp.value=q; updateItem(row.dataset.productId,q,row);
+        });
+    });
+    document.querySelectorAll('.qty-input').forEach(inp=>{
+        inp.addEventListener('change',function(){
+            const row=this.closest('.cart-row');
+            let q=parseInt(this.value); if(isNaN(q)||q<1) q=1;
+            if(q>parseInt(this.max)){ alert('库存不足'); q=parseInt(this.max); }
+            this.value=q; updateItem(row.dataset.productId,q,row);
+        });
+    });
+    document.querySelectorAll('.delete-btn').forEach(b=>{
+        b.addEventListener('click',function(){
+            const row=this.closest('.cart-row');
+            if(!confirm('确定移除 "'+this.dataset.productName+'" 吗？')) return;
+            fetch('/api/cart/delete/'+this.dataset.productId,{method:'DELETE'})
+            .then(r=>r.json())
+            .then(d=>{
+                if(d.success){
+                    row.remove(); document.getElementById('cart-total').textContent='¥'+d.total.toFixed(2);
+                    updateCartBadge();
+                    if(!document.querySelectorAll('.cart-row').length) location.reload();
+                }
+            });
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

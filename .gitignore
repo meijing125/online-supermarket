@@ -1,0 +1,25 @@
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# SQLite 数据库文件 —— 运行时自动生成，不入库
+*.db
+*.sqlite3
+
+# 环境变量（可能含密钥，绝不能提交）
+.env
+
+# 用户上传的商品图片 —— 运行时产生，不入库
+static/uploads/*
+!static/uploads/.gitkeep
+
+# 编辑器 / 系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

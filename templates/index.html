@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}臻品汇 - 数码奢品精选{% endblock %}
+{% block content %}
+
+<!-- Hero - 全宽 -->
+<div class="hero text-center py-5">
+    <div class="container-fluid py-4 hero-content" style="max-width:1400px;">
+        <p class="hero-subtitle">✦ Premium Collection</p>
+        <h1 class="mb-2">💎 臻品汇</h1>
+        <div class="hero-divider"></div>
+        <p class="lead mb-3">数码好物 · 奢侈精品 · 品质生活</p>
+        <span class="badge px-3 py-2">✨ 新用户首单享 9 折优惠</span>
+    </div>
+</div>
+
+<!-- 特色条 - 全宽 -->
+<div class="py-3" style="background:#fff; border-bottom:1px solid #eee;">
+    <div class="container-fluid d-flex justify-content-center gap-5 flex-wrap" style="max-width:1400px;">
+        <span class="text-muted small"><i class="bi bi-check-circle-fill me-1" style="color:var(--gold);"></i> 正品保障</span>
+        <span class="text-muted small"><i class="bi bi-truck me-1" style="color:var(--gold);"></i> 全国包邮</span>
+        <span class="text-muted small"><i class="bi bi-shield-check me-1" style="color:var(--gold);"></i> 7天退换</span>
+        <span class="text-muted small"><i class="bi bi-headset me-1" style="color:var(--gold);"></i> 专属客服</span>
+    </div>
+</div>
+
+<!-- 商品区 -->
+<div class="py-4">
+<div class="container-fluid" style="max-width:1400px;">
+
+    <!-- 标题 + 分类 -->
+    <div class="section-head">
+        <h2><i class="bi bi-diamond-fill me-2"></i>精选好物</h2>
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">全部</button>
+            <button class="filter-tab" data-filter="digital"><i class="bi bi-phone me-1"></i>数码</button>
+            <button class="filter-tab" data-filter="luxury"><i class="bi bi-gem me-1"></i>奢品</button>
+            <button class="filter-tab" data-filter="lifestyle"><i class="bi bi-house-heart me-1"></i>生活</button>
+        </div>
+    </div>
+
+    <!-- 商品网格 -->
+    {% if products %}
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3 g-md-4" id="product-grid">
+        {% for product in products %}
+        {% set cat = 'lifestyle' %}
+        {% if 'iPhone' in product.name or 'MacBook' in product.name or 'AirPods' in product.name or 'Sony' in product.name or 'Watch' in product.name or 'Switch' in product.name %}{% set cat = 'digital' %}{% endif %}
+        {% if 'LV' in product.name or 'Dior' in product.name or 'Herm' in product.name or 'Gucci' in product.name or 'Chanel' in product.name %}{% set cat = 'luxury' %}{% endif %}
+        <div class="col" data-category="{{ cat }}">
+            <div class="product-card h-100 d-flex flex-column">
+
+                <!-- 图片 -->
+                <div class="product-img">
+                    <img src="{{ product.image_url }}"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div class="img-fallback" style="display:none;">
+                        <i class="bi bi-image"></i>
+                    </div>
+
+                    <!-- 标签 -->
+                    {% if loop.index <= 3 %}
+                    <span class="product-tag tag-new">NEW</span>
+                    {% elif product.stock <= 20 and product.stock > 0 %}
+                    <span class="product-tag tag-low">仅剩{{ product.stock }}件</span>
+                    {% endif %}
+
+                    <!-- 快捷操作 -->
+                    <div class="product-actions">
+                        <button title="快速预览" class="quick-view-btn"
+                                data-name="{{ product.name }}"
+                                data-price="{{ '%.2f'|format(product.price) }}"
+                                data-desc="{{ product.description }}"
+                                data-img="{{ product.image_url }}"
+                                data-pid="{{ product.id }}">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+
+                    <!-- 售罄 -->
+                    {% if product.stock == 0 %}
+                    <div class="sold-out-mask"><span>SOLD OUT</span></div>
+                    {% endif %}
+                </div>
+
+                <!-- 信息 -->
+                <div class="product-info flex-grow-1">
+                    <div class="product-name" title="{{ product.name }}">{{ product.name }}</div>
+                    <div class="product-desc">{{ product.description or '品质之选，值得拥有' }}</div>
+                    <div class="product-meta">
+                        <span class="product-price"><span class="symbol">¥</span>{{ "%.2f"|format(product.price) }}</span>
+                        <span class="product-stock">库存 {{ product.stock }}</span>
+                    </div>
+                    <button class="add-cart-btn"
+                            data-product-id="{{ product.id }}"
+                            data-product-name="{{ product.name }}"
+                            {% if product.stock == 0 %}disabled{% endif %}>
+                        <i class="bi bi-cart-plus"></i>
+                        {% if product.stock == 0 %}暂时缺货{% else %}加入购物车{% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-inbox display-3" style="color:#d1d5db;"></i>
+        <h4 class="mt-3" style="color:var(--sub);">暂无商品，敬请期待新品上架</h4>
+    </div>
+    {% endif %}
+</div></div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="cart-toast" class="toast text-bg-dark border-0" role="alert">
+        <div class="d-flex">
+            <div class="toast-body" id="toast-msg"><i class="bi bi-check-circle me-2" style="color:var(--gold);"></i>已加入购物车</div>
+            <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<!-- 自定义预览弹窗（纯 CSS+JS，零 Bootstrap Modal 依赖） -->
+<div id="qv-overlay" class="qv-overlay">
+    <div class="qv-dialog">
+        <div class="qv-header">
+            <span class="small text-muted">商品详情</span>
+            <button id="qv-close" class="qv-close">&times;</button>
+        </div>
+        <div class="qv-body">
+            <div class="row g-4">
+                <div class="col-md-5">
+                    <img id="qv-img" src="" class="w-100 rounded-3" style="height:300px;object-fit:cover;background:#f0efe9;">
+                </div>
+                <div class="col-md-7">
+                    <span class="badge bg-dark mb-2" style="color:#e8d5a3;">臻品推荐</span>
+                    <h4 id="qv-name" class="fw-bold mb-2"></h4>
+                    <p id="qv-desc" class="text-muted small mb-3"></p>
+                    <h3 id="qv-price" class="fw-bold mb-3" style="color:#dc2626;"></h3>
+                    <button class="btn btn-dark btn-lg w-100" id="qv-add-btn" style="border-radius:12px;">
+                        <i class="bi bi-cart-plus me-2"></i>加入购物车
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function(){
+    var toast = new bootstrap.Toast(document.getElementById('cart-toast'), { delay: 2000 });
+    var toastMsg = document.getElementById('toast-msg');
+
+    // ===== 自定义弹窗控制（零 Bootstrap 依赖） =====
+    var overlay = document.getElementById('qv-overlay');
+    var previewPid = null, previewName = '';
+
+    // 关闭弹窗
+    function closeQv() {
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    // 打开弹窗
+    function openQv() {
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    // 关闭：点 X
+    document.getElementById('qv-close').addEventListener('click', closeQv);
+    // 关闭：点遮罩
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) closeQv(); });
+    // 关闭：按 ESC
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && overlay.classList.contains('open')) closeQv(); });
+
+    // ===== 分类筛选 =====
+    document.querySelectorAll('.filter-tab').forEach(function(tab){
+        tab.addEventListener('click', function(){
+            document.querySelectorAll('.filter-tab').forEach(function(t){ t.classList.remove('active'); });
+            this.classList.add('active');
+            var f = this.dataset.filter;
+            document.querySelectorAll('#product-grid > .col').forEach(function(col){
+                col.style.display = (f === 'all' || col.dataset.category === f) ? '' : 'none';
+            });
+        });
+    });
+
+    // ===== 加入购物车 =====
+    function addToCart(el) {
+        var pid = parseInt(el.getAttribute('data-product-id'));
+        var pname = el.getAttribute('data-product-name');
+        if (!pid) return;
+        var orig = el.innerHTML;
+        el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>添加中...';
+        el.disabled = true;
+        fetch('/api/cart/add', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({product_id: pid, quantity: 1})
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            el.innerHTML = orig; el.disabled = false;
+            if(d.success){ updateCartBadge(); toastMsg.innerHTML='<i class="bi bi-check-circle me-2" style="color:var(--gold);"></i>'+pname+' 已加入购物车'; toast.show(); }
+            else { toastMsg.innerHTML='<i class="bi bi-exclamation-triangle me-2"></i>'+d.message; toast.show(); }
+        })
+        .catch(function(){ el.innerHTML = orig; el.disabled = false; });
+    }
+
+    document.querySelectorAll('.add-cart-btn').forEach(function(b){
+        b.addEventListener('click', function(){ addToCart(this); });
+    });
+
+    // ===== 快速预览 =====
+    document.querySelectorAll('.quick-view-btn').forEach(function(b){
+        b.addEventListener('click', function(e){
+            e.preventDefault();
+            previewPid = parseInt(this.getAttribute('data-pid'));
+            previewName = this.getAttribute('data-name');
+            document.getElementById('qv-img').src = this.getAttribute('data-img') || '';
+            document.getElementById('qv-name').textContent = previewName;
+            document.getElementById('qv-desc').textContent = this.getAttribute('data-desc') || '';
+            document.getElementById('qv-price').textContent = '¥' + (this.getAttribute('data-price') || '0');
+            openQv();
+        });
+    });
+
+    // 弹窗内加入购物车
+    document.getElementById('qv-add-btn').addEventListener('click', function(){
+        if (!previewPid) return;
+        this.setAttribute('data-product-id', previewPid);
+        this.setAttribute('data-product-name', previewName);
+        closeQv();
+        setTimeout(function(){ addToCart(document.getElementById('qv-add-btn')); }, 100);
+    });
+
+})();
+</script>
+{% endblock %}

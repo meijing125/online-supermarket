@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}我的订单 - 臻品汇{% endblock %}
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1400px;">
+    <div class="section-head">
+        <h2><i class="bi bi-receipt me-2" style="color:var(--gold);"></i>我的订单</h2>
+    </div>
+
+    {% if orders %}
+    <div class="row g-4">
+        {% for order in orders %}
+        <div class="col-12">
+            <div class="card-elevated p-3 p-md-4">
+                <!-- 订单头部 -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                    <div>
+                        <span class="text-muted small me-3">订单号：<strong>{{ order.id }}</strong></span>
+                        <span class="text-muted small me-3">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <span class="badge {% if order.status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}" style="font-size:0.75rem;">
+                            {% if order.status == 'paid' %}已支付{% elif order.status == 'pending' %}待支付{% else %}{{ order.status }}{% endif %}
+                        </span>
+                    </div>
+                    <span class="fw-bold" style="font-size:1.3rem;color:#dc2626;">¥{{ "%.2f"|format(order.total_amount) }}</span>
+                </div>
+
+                <!-- 订单明细 -->
+                {% for item in order['items'] %}
+                <div class="d-flex align-items-center gap-3 mb-2 {% if not loop.last %}pb-2{% endif %}">
+                    <span class="fw-semibold flex-grow-1 text-truncate">{{ item.product_name }}</span>
+                    <span class="text-muted small">×{{ item.quantity }}</span>
+                    <span class="fw-bold" style="color:#dc2626;">¥{{ "%.2f"|format(item.price * item.quantity) }}</span>
+                </div>
+                {% endfor %}
+
+                <!-- 收货信息 -->
+                <div class="mt-3 pt-2 border-top">
+                    <div class="row small text-muted">
+                        <div class="col-md-6">
+                            <i class="bi bi-geo-alt me-1" style="color:var(--gold);"></i>{{ order.address }}
+                        </div>
+                        <div class="col-md-6 text-md-end mt-1 mt-md-0">
+                            <i class="bi bi-credit-card me-1" style="color:var(--gold);"></i>
+                            {% if order.payment_method == 'wechat' %}微信支付{% elif order.payment_method == 'alipay' %}支付宝{% else %}{{ order.payment_method }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-inbox display-3" style="color:#d1d5db;"></i>
+        <h4 class="mt-3" style="color:var(--sub);">暂无订单记录</h4>
+        <p class="text-muted">快去选购心仪的商品吧</p>
+        <a href="{{ url_for('index') }}" class="btn btn-dark btn-lg mt-2" style="border-radius:12px;">
+            <i class="bi bi-shop me-2"></i>去逛逛
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
